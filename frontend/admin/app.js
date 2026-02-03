@@ -3,11 +3,8 @@
  * Core Logic & Responsiveness
  */
 
-// ... (Konfigurasi & State tetap dipertahankan melalui struktur modular yang sama)
-// Kita hanya menambahkan fungsi kontrol UI Mobile
-
 const KONFIGURASI = {
-    URL_DASAR_API: 'http://localhost:8080', 
+    URL_DASAR_API: '', // Relative
     TIMEOUT_REQUEST: 5000, 
     ENDPOINT: {
         PRODUK: '/api/produk',
@@ -24,59 +21,143 @@ const StateAplikasi = {
 };
 
 // ============================================
-// LOGIKA RESPONSIF & UI CONTROL
+// UI & MODAL CONTROL (New)
+// ============================================
+
+function bukaModalAdmin(mode, id = null) {
+    const modal = document.getElementById('modal-admin');
+    const content = document.getElementById('modal-content');
+    const title = document.getElementById('modal-title');
+    const formAdd = document.getElementById('form-tambah-produk');
+    const formStok = document.getElementById('form-update-stok');
+
+    modal.classList.remove('opacity-0', 'pointer-events-none');
+    content.classList.remove('scale-95');
+    content.classList.add('scale-100');
+
+    formAdd.classList.add('hidden');
+    formStok.classList.add('hidden');
+
+    if (mode === 'tambah') {
+        title.textContent = 'Tambah Produk Baru';
+        formAdd.classList.remove('hidden');
+    } else if (mode === 'stok') {
+        title.textContent = 'Update Stok Fisik';
+        formStok.classList.remove('hidden');
+        document.getElementById('edit-id').value = id;
+        // Cari nama produk untuk label
+        const p = StateAplikasi.data.produk.find(x => x.id_produk == id);
+        if(p) {
+            document.getElementById('label-product-name').textContent = p.nama_produk;
+            document.getElementById('edit-stok').value = p.stok_roti;
+        }
+    }
+}
+
+function tutupModalAdmin() {
+    const modal = document.getElementById('modal-admin');
+    const content = document.getElementById('modal-content');
+    modal.classList.add('opacity-0', 'pointer-events-none');
+    content.classList.remove('scale-100');
+    content.classList.add('scale-95');
+}
+
+// ============================================
+// API ACTIONS (New)
+// ============================================
+
+async function simpanProdukBaru() {
+    const payload = {
+        kode: document.getElementById('in-kode').value,
+        nama: document.getElementById('in-nama').value,
+        jenis: document.getElementById('in-jenis').value,
+        harga: parseFloat(document.getElementById('in-harga').value),
+        stok: parseInt(document.getElementById('in-stok').value)
+    };
+
+    if(!payload.kode || !payload.nama) return alert("Lengkapi data!");
+
+    try {
+        const res = await fetch('/api/produk/baru', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload)
+        });
+        const json = await res.json();
+        
+        if (res.ok) {
+            tutupModalAdmin();
+            tampilkanToast("✨ Produk berhasil ditambahkan!");
+            ambilDataProduk(); // Refresh
+        } else {
+            alert("Gagal: " + json.pesan);
+        }
+    } catch (e) {
+        alert("Error Jaringan");
+    }
+}
+
+async function simpanStokBaru() {
+    const id = document.getElementById('edit-id').value;
+    const stok = parseInt(document.getElementById('edit-stok').value);
+
+    try {
+        const res = await fetch(`/api/produk/stok?id=${id}`, {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ stok: stok })
+        });
+        const json = await res.json();
+
+        if (res.ok) {
+            tutupModalAdmin();
+            tampilkanToast("✅ Stok diperbarui!");
+            ambilDataProduk(); // Refresh
+        } else {
+            alert("Gagal: " + json.pesan);
+        }
+    } catch (e) {
+        alert("Error Jaringan");
+    }
+}
+
+// ============================================
+// LOGIKA RESPONSIF (Original)
 // ============================================
 
 function bukaMenuMobile() {
     const sidebar = document.getElementById('sidebar-utama');
     const overlay = document.getElementById('mobile-overlay');
-    
-    // Tampilkan Overlay
     overlay.classList.remove('hidden');
-    // Tick kecil agar transisi opacity jalan
     setTimeout(() => overlay.classList.remove('opacity-0'), 10);
-    
-    // Geser Sidebar masuk
     sidebar.classList.remove('-translate-x-full');
 }
 
 function tutupMenuMobile() {
     const sidebar = document.getElementById('sidebar-utama');
     const overlay = document.getElementById('mobile-overlay');
-    
-    // Geser Sidebar keluar
     sidebar.classList.add('-translate-x-full');
-    
-    // Hilangkan Overlay dengan fade out
     overlay.classList.add('opacity-0');
     setTimeout(() => overlay.classList.add('hidden'), 300);
 }
 
-// override navigasiKe untuk menutup menu di mobile saat klik item
-const navigasiKeOriginal = navigasiKe; // Simpan fungsi lama (konseptual)
-
 function navigasiKe(target) {
     StateAplikasi.halamanAktif = target;
-    
-    // Update Active State di Sidebar
     document.querySelectorAll('.nav-item').forEach(el => {
         const aktif = el.dataset.target === target;
         el.classList.toggle('active', aktif);
         el.classList.toggle('bg-primary-50', aktif);
         el.classList.toggle('text-primary-600', aktif);
-        
-        // Update Ikon
         const ikon = el.querySelector('i');
         if (aktif) {
             ikon.className = ikon.className.replace('text-slate-400', 'text-primary-600');
-            if(!ikon.classList.contains('ph-fill')) ikon.classList.replace('ph', 'ph-fill'); // Jadi solid saat aktif
+            if(!ikon.classList.contains('ph-fill')) ikon.classList.replace('ph', 'ph-fill');
         } else {
             ikon.className = ikon.className.replace('text-primary-600', 'text-slate-400');
-            if(ikon.classList.contains('ph-fill')) ikon.classList.replace('ph-fill', 'ph'); // Jadi outline saat tidak aktif
+            if(ikon.classList.contains('ph-fill')) ikon.classList.replace('ph-fill', 'ph');
         }
     });
 
-    // Toggle Halaman
     ['produk', 'transaksi', 'pencatatan'].forEach(id => {
         const el = document.getElementById(`konten-${id}`);
         if(el) el.classList.add('hidden');
@@ -88,23 +169,17 @@ function navigasiKe(target) {
         targetEl.classList.add('animasi-masuk');
     }
 
-    // Update Header Title
     const judul = { 'produk': 'Manajemen Produk', 'transaksi': 'Riwayat Transaksi', 'pencatatan': 'Log Aktivitas' };
     document.getElementById('judul-halaman').textContent = judul[target] || 'Dashboard';
 
-    // Auto Data Fetching
     if (target === 'produk') ambilDataProduk();
     if (target === 'transaksi') ambilDataTransaksi();
     if (target === 'pencatatan') ambilDataLog();
     
-    // Tutup menu mobile jika sedang dibuka (Responsive behavior)
     if (window.innerWidth < 768) {
         tutupMenuMobile();
     }
 }
-
-// ... (Sisa fungsi API, Utilitas, dan Rendering tetap sama persis untuk menjaga kompatibilitas) ...
-// Saya menulis ulang fungsi-fungsi inti agar file ini valid dan lengkap.
 
 const formatRupiah = (angka) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(angka);
 const formatTanggal = (str) => (!str) ? '-' : new Intl.DateTimeFormat('id-ID', { dateStyle: 'long', timeStyle: 'short' }).format(new Date(str));
@@ -143,7 +218,8 @@ async function ambilDataProduk() {
     tampilkanSkeleton(el, 4);
     try {
         const h = await panggilAPI(KONFIGURASI.ENDPOINT.PRODUK);
-        renderProduk(h.data || []);
+        StateAplikasi.data.produk = h.data || [];
+        renderProduk(StateAplikasi.data.produk);
         perbaruiStatistik();
     } catch (e) { el.innerHTML = uiError(e.message); }
 }
@@ -153,7 +229,8 @@ async function ambilDataTransaksi() {
     el.innerHTML = '<tr><td colspan="5" class="p-6 text-center text-slate-400">Memuat...</td></tr>';
     try {
         const h = await panggilAPI(KONFIGURASI.ENDPOINT.TRANSAKSI);
-        renderTransaksi(h.data || []);
+        StateAplikasi.data.transaksi = h.data || [];
+        renderTransaksi(StateAplikasi.data.transaksi);
         perbaruiStatistik();
     } catch (e) { el.innerHTML = `<tr><td colspan="5">${uiError(e.message)}</td></tr>`; }
 }
@@ -163,7 +240,8 @@ async function ambilDataLog(tipe='') {
     el.innerHTML = '<div class="p-6 text-center text-slate-400">Memuat log...</div>';
     try {
         const h = await panggilAPI(tipe ? `${KONFIGURASI.ENDPOINT.PENCATATAN}?tipe=${tipe}` : KONFIGURASI.ENDPOINT.PENCATATAN);
-        renderLog(h.data || []);
+        StateAplikasi.data.pencatatan = h.data || [];
+        renderLog(StateAplikasi.data.pencatatan);
         perbaruiStatistik();
     } catch (e) { el.innerHTML = uiError(e.message); }
 }
@@ -187,8 +265,9 @@ function renderProduk(data) {
                    <p class="text-[10px] text-slate-400 font-bold uppercase">Harga</p>
                    <p class="text-slate-800 font-bold text-lg">${formatRupiah(item.harga)}</p>
                 </div>
-                <button class="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-primary-50 hover:text-primary-600 flex items-center justify-center transition-colors">
-                    <i class="ph-bold ph-dots-three-vertical"></i>
+                <!-- Tombol Edit Stok (Update) -->
+                <button onclick="bukaModalAdmin('stok', ${item.id_produk})" class="w-8 h-8 rounded-lg bg-slate-50 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 flex items-center justify-center transition-colors">
+                    <i class="ph-bold ph-pencil-simple"></i>
                 </button>
             </div>
         </div>`).join('');
@@ -230,9 +309,9 @@ function tampilkanSkeleton(el, n) { el.innerHTML = Array(n).fill('<div class="h-
 function muatUlangData() { const h = StateAplikasi.halamanAktif; if(h==='produk')ambilDataProduk(); if(h==='transaksi')ambilDataTransaksi(); if(h==='pencatatan')ambilDataLog(); tampilkanToast('Data diperbarui'); }
 function terapkanFilterLog() { ambilDataLog(document.getElementById('filter-log').value); }
 function perbaruiStatistik() {
-    ['produk','transaksi','log'].forEach(k => {
+    ['produk','transaksi'].forEach(k => {
         const el = document.getElementById(`stat-${k}`);
-        if(el) el.textContent = (StateAplikasi.data[k==='log'?'pencatatan':k] || []).length;
+        if(el) el.textContent = (StateAplikasi.data[k] || []).length;
     });
     const s = document.getElementById('stat-stok');
     if(s) s.textContent = (StateAplikasi.data.produk||[]).reduce((a,b)=>a+(b.stok_roti||0),0);

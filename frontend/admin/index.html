@@ -237,61 +237,115 @@
                             <h3 class="font-bold text-slate-800">Inventori Produk</h3>
                             <div class="text-xs text-slate-500 mt-0.5">Menampilkan seluruh data produk aktif</div>
                         </div>
-                    </div>
-                    <div class="p-6">
-                        <div id="grid-produk"
-                            class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                            <!-- Produk akan dimuat di sini oleh JavaScript -->
-                        </div>
+                        <button onclick="bukaModalAdmin('tambah')"
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-xs font-bold transition flex items-center gap-2">
+                            <i class="ph-bold ph-plus"></i> Tambah Produk
+                        </button>
                     </div>
                 </div>
             </section>
 
-            <!-- Bagian Transaksi -->
-            <section id="konten-transaksi" class="hidden space-y-6">
-                <div class="bg-white rounded-xl shadow-card border border-slate-200 overflow-hidden">
-                    <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
-                        <h3 class="font-bold text-slate-800">Riwayat Penjualan</h3>
+            <!-- Modal Admin Action -->
+            <div id="modal-admin"
+                class="fixed inset-0 z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+                <div class="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onclick="tutupModalAdmin()"></div>
+                <div class="bg-white rounded-2xl w-full max-w-md relative z-10 shadow-2xl p-6 transform scale-95 transition-transform duration-300"
+                    id="modal-content">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 id="modal-title" class="text-lg font-bold text-slate-900">Action</h3>
+                        <button onclick="tutupModalAdmin()" class="text-slate-400 hover:text-rose-500"><i
+                                class="ph-bold ph-x text-lg"></i></button>
                     </div>
-                    <div class="overflow-x-auto">
-                        <table class="w-full text-left text-sm whitespace-nowrap">
-                            <thead
-                                class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-xs uppercase tracking-wider">
-                                <tr>
-                                    <th class="px-6 py-4">ID Transaksi</th>
-                                    <th class="px-6 py-4">Pelanggan</th>
-                                    <th class="px-6 py-4">Cabang</th>
-                                    <th class="px-6 py-4">Tanggal</th>
-                                    <th class="px-6 py-4 text-right">Total Nominal</th>
-                                </tr>
-                            </thead>
-                            <tbody id="tabel-transaksi" class="divide-y divide-slate-100 text-slate-700">
-                                <!-- Data transaksi dimuat di sini -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </section>
 
-            <!-- Bagian Pencatatan (Log) -->
-            <section id="konten-pencatatan" class="hidden space-y-6">
-                <div class="bg-white rounded-xl shadow-card border border-slate-200">
-                    <div
-                        class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-4">
-                        <h3 class="font-bold text-slate-800">Log Aktivitas Sistem</h3>
-                        <select id="filter-log" onchange="terapkanFilterLog()"
-                            class="text-sm border-slate-200 rounded-lg focus:ring-primary-500 focus:border-primary-500 px-3 py-2 bg-white shadow-sm font-medium text-slate-600 outline-none">
-                            <option value="">Semua Aktivitas</option>
-                            <option value="PENJUALAN">Penjualan</option>
-                            <option value="PEMBELIAN">Pembelian</option>
-                            <option value="PENGIRIMAN">Pengiriman</option>
+                    <!-- Form Tambah Produk -->
+                    <div id="form-tambah-produk" class="hidden space-y-4">
+                        <input id="in-kode" type="text" placeholder="Kode Produk (ex: R01)"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold">
+                        <input id="in-nama" type="text" placeholder="Nama Produk"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold">
+                        <select id="in-jenis"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold">
+                            <option value="Roti">Roti</option>
+                            <option value="Donat">Donat</option>
+                            <option value="Minuman">Minuman</option>
                         </select>
+                        <input id="in-harga" type="number" placeholder="Harga (Rp)"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold">
+                        <input id="in-stok" type="number" placeholder="Stok Awal"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold">
+                        <button onclick="simpanProdukBaru()"
+                            class="w-full bg-indigo-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-indigo-700">Simpan
+                            Produk</button>
                     </div>
-                    <div id="list-log" class="divide-y divide-slate-100">
-                        <!-- List log dimuat di sini -->
+
+                    <!-- Form Update Stok -->
+                    <div id="form-update-stok" class="hidden space-y-4">
+                        <input type="hidden" id="edit-id">
+                        <div class="bg-slate-50 p-3 rounded-lg text-center mb-2">
+                            <p class="text-xs text-slate-500 uppercase font-bold">Produk</p>
+                            <p id="label-product-name" class="font-bold text-slate-800 text-lg">Nama Produk</p>
+                        </div>
+                        <input id="edit-stok" type="number" placeholder="Stok Baru"
+                            class="w-full bg-slate-50 border border-slate-200 rounded-lg px-4 py-2 text-sm font-bold">
+                        <button onclick="simpanStokBaru()"
+                            class="w-full bg-emerald-600 text-white py-2 rounded-lg font-bold text-sm hover:bg-emerald-700">Update
+                            Stok</button>
                     </div>
                 </div>
-            </section>
+            </div>
+            <div class="p-6">
+                <div id="grid-produk" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    <!-- Produk akan dimuat di sini oleh JavaScript -->
+                </div>
+            </div>
+        </div>
+        </section>
+
+        <!-- Bagian Transaksi -->
+        <section id="konten-transaksi" class="hidden space-y-6">
+            <div class="bg-white rounded-xl shadow-card border border-slate-200 overflow-hidden">
+                <div class="px-6 py-4 border-b border-slate-100 bg-slate-50/50">
+                    <h3 class="font-bold text-slate-800">Riwayat Penjualan</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left text-sm whitespace-nowrap">
+                        <thead
+                            class="bg-slate-50 text-slate-500 font-bold border-b border-slate-200 text-xs uppercase tracking-wider">
+                            <tr>
+                                <th class="px-6 py-4">ID Transaksi</th>
+                                <th class="px-6 py-4">Pelanggan</th>
+                                <th class="px-6 py-4">Cabang</th>
+                                <th class="px-6 py-4">Tanggal</th>
+                                <th class="px-6 py-4 text-right">Total Nominal</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tabel-transaksi" class="divide-y divide-slate-100 text-slate-700">
+                            <!-- Data transaksi dimuat di sini -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+
+        <!-- Bagian Pencatatan (Log) -->
+        <section id="konten-pencatatan" class="hidden space-y-6">
+            <div class="bg-white rounded-xl shadow-card border border-slate-200">
+                <div
+                    class="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center justify-between flex-wrap gap-4">
+                    <h3 class="font-bold text-slate-800">Log Aktivitas Sistem</h3>
+                    <select id="filter-log" onchange="terapkanFilterLog()"
+                        class="text-sm border-slate-200 rounded-lg focus:ring-primary-500 focus:border-primary-500 px-3 py-2 bg-white shadow-sm font-medium text-slate-600 outline-none">
+                        <option value="">Semua Aktivitas</option>
+                        <option value="PENJUALAN">Penjualan</option>
+                        <option value="PEMBELIAN">Pembelian</option>
+                        <option value="PENGIRIMAN">Pengiriman</option>
+                    </select>
+                </div>
+                <div id="list-log" class="divide-y divide-slate-100">
+                    <!-- List log dimuat di sini -->
+                </div>
+            </div>
+        </section>
 
         </div>
     </main>

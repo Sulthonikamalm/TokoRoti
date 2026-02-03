@@ -25,38 +25,40 @@ func main() {
 		portAplikasi = "8080"
 	}
 
-	dbUser := "root"
-	dbPass := ""
-	dbHost := "127.0.0.1:3306"
-	dbName := "tokoroti"
+	// ==========================================
+	// 2. Konfigurasi Database (Cloud Ready)
+	// ==========================================
+	var dsn string
 
+	// Cek Environment Variable (Priority 1: Production/Cloud)
 	if urlEnv := os.Getenv("DATABASE_URL"); urlEnv != "" {
-		// Logika parsing env jika perlu, tapi kita fokus lokal XAMPP dulu
+		log.Println("Info: Menggunakan konfigurasi database dari Environment Variable (Cloud Mode).")
+		dsn = urlEnv
+	} else {
+		// Fallback ke Lokal XAMPP (Priority 2: Local Development)
+		dbUser := "root"
+		dbPass := ""
+		dbHost := "127.0.0.1:3306"
+		dbName := "tokoroti"
+
+		log.Println("Info: Menggunakan konfigurasi database Lokal (XAMPP Mode).")
+
+		// Cek & Buat Database Lokal jika belum ada
+		dsnCek := fmt.Sprintf("%s:%s@tcp(%s)/", dbUser, dbPass, dbHost)
+		dbCek, err := sql.Open("mysql", dsnCek)
+		if err == nil {
+			_, _ = dbCek.Exec("CREATE DATABASE IF NOT EXISTS " + dbName)
+			dbCek.Close()
+		}
+
+		// multiStatements=true penting untuk seed data
+		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true", dbUser, dbPass, dbHost, dbName)
 	}
 
 	// ==========================================
-	// 2. Cek & Buat Database (Jika Belum Ada)
+	// 3. Inisialisasi Koneksi & Migrasi
 	// ==========================================
-	dsnDasar := fmt.Sprintf("%s:%s@tcp(%s)/", dbUser, dbPass, dbHost)
-	dbCek, err := sql.Open("mysql", dsnDasar)
-	if err != nil {
-		log.Fatal("Gagal membuka koneksi cek database:", err)
-	}
-
-	// Coba buat database
-	_, err = dbCek.Exec("CREATE DATABASE IF NOT EXISTS " + dbName)
-	if err != nil {
-		log.Printf("Peringatan saat membuat DB: %v (Pastikan MySQL XAMPP sudah Start)", err)
-	}
-	dbCek.Close()
-
-	// ==========================================
-	// 3. Koneksi Aplikasi Utama & AUTO MIGRATION
-	// ==========================================
-	// TAMBAHAN: multiStatements=true agar bisa jalanin file SQL panjang sekaligus
-	urlDatabaseLengkap := fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true", dbUser, dbPass, dbHost, dbName)
-
-	db, err := repository.InisialisasiDatabase(urlDatabaseLengkap)
+	db, err := repository.InisialisasiDatabase(dsn)
 	if err != nil {
 		log.Fatalf("Fatal: Gagal inisialisasi koneksi aplikasi: %v", err)
 	}
@@ -69,58 +71,50 @@ func main() {
 	repoProduk := repository.BuatRepositoryProduk(db)
 	repoTransaksi := repository.BuatRepositoryTransaksi(db)
 	repoPencatatan := repository.BuatRepositoryPencatatan(db)
-	h := handler.BuatHandler(repoProduk, repoTransaksi, repoPencatatan)
+	repoPelanggan := repository.BuatRepositoryPelanggan(db)
+	h := handler.BuatHandler(repoProduk, repoTransaksi, repoPencatatan, repoPelanggan)
 
 	// Routing & Server
 	mux := http.NewServeMux()
 
-	// API Endpoints
+	// --- API Endpoints ---
 	mux.HandleFunc("/api/produk", h.AmbilDaftarProduk)
 	mux.HandleFunc("/api/transaksi", h.AmbilRiwayatTransaksi)
 	mux.HandleFunc("/api/pencatatan", h.AmbilLogAktivitas)
+	mux.HandleFunc("/api/pelanggan/cek", h.CekMemberHandler)
+	mux.HandleFunc("/api/pelanggan/baru", h.RegistrasiPelangganHandler)
+	mux.HandleFunc("/api/produk/baru", h.TambahProdukHandler)
+	mux.HandleFunc("/api/produk/stok", h.UpdateStokHandler)
+	mux.HandleFunc("/api/transaksi/baru", h.BuatTransaksiHandler)
+	mux.HandleFunc("/api/transaksi/checkout", h.CheckoutKeranjangHandler)
 
-	// Utility Endpoints
+	// --- Utility Endpoints ---
 	mux.HandleFunc("/kesehatan", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Write([]byte(`{"status":"sehat", "pesan":"Sistem berjalan normal"}`))
 	})
 
-	// Root Handler (Agar tidak 404 saat dibuka di browser)
-	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
-			return
-		}
-		w.Header().Set("Content-Type", "text/html")
-		htmlSapaan := `
-		<!DOCTYPE html>
-		<html>
-		<head>
-			<title>Backend BreadHouse</title>
-			<style>
-				body { font-family: sans-serif; text-align: center; padding: 50px; color: #333; }
-				h1 { color: #d97706; }
-				.card { background: #fff7ed; padding: 20px; border-radius: 10px; display: inline-block; border: 1px solid #fed7aa; }
-			</style>
-		</head>
-		<body>
-			<div class="card">
-				<h1>🍞 BreadHouse API Berjalan!</h1>
-				<p>Backend aktif dan terhubung ke database <b>tokoroti</b>.</p>
-				<p>Silakan buka Frontend (<i>index.html</i>) untuk mengakses dashboard.</p>
-			</div>
-		</body>
-		</html>
-		`
-		w.Write([]byte(htmlSapaan))
-	})
+	// --- STATIC FILE SERVING (Frontend Integration) ---
+	// Solusi Elegan: Backend melayani Frontend agar satu domain (No CORS Issues)
 
+	// 1. Serve Folder Public (Toko) di Root URL
+	fsPublic := http.FileServer(http.Dir("../frontend/public"))
+	mux.Handle("/", http.StripPrefix("/", fsPublic))
+
+	// 2. Serve Folder Admin di URL /admin/
+	// Perlu trik sedikit karena struktur folder frontend terpisah
+	fsAdmin := http.FileServer(http.Dir("../frontend/admin"))
+	mux.Handle("/admin/", http.StripPrefix("/admin/", fsAdmin))
+
+	// CORS sudah tidak terlalu krusial karena satu domain, tapi tetap pasang untuk safety
 	handlerAkhir := handler.MiddlewareCORS(mux)
 
 	log.Println("===============================================================")
-	log.Printf("✅ SISTEM BREADHOUSE SIAP!")
-	log.Printf("📡 Backend berjalan di: http://localhost:%s", portAplikasi)
-	log.Printf("📂 Database           : 'tokoroti' (Auto-Migration Active)")
+	log.Printf("✅ SISTEM BREADHOUSE SIAP (MODE FULLSTACK)")
+	log.Printf("🛒 Toko (Public) : http://localhost:%s/", portAplikasi)
+	log.Printf("📊 Admin Panel   : http://localhost:%s/admin/", portAplikasi)
+	log.Printf("📡 API Endpoint  : http://localhost:%s/api/...", portAplikasi)
+	log.Printf("📂 Database      : 'tokoroti' (Terhubung)")
 	log.Println("===============================================================")
 
 	if err := http.ListenAndServe(":"+portAplikasi, handlerAkhir); err != nil {

@@ -53,3 +53,18 @@ func (r *RepositoryProduk) AmbilSemua() ([]model.ProdukRoti, error) {
 
 	return daftarProduk, nil
 }
+
+// TambahProduk memasukkan produk roti baru ke database
+func (r *RepositoryProduk) TambahProduk(kode, nama, jenis string, harga float64, stok int) error {
+	_, err := r.db.Exec(`
+		INSERT INTO Produk_Roti (Kode_Produk, Nama_Produk, Jenis_Produk, Harga, Stok_Roti)
+		VALUES (?, ?, ?, ?, ?)`,
+		kode, nama, jenis, harga, stok)
+	return err
+}
+
+// UpdateStok mengubah jumlah stok produk tertentu
+func (r *RepositoryProduk) UpdateStok(id int, stokBaru int) error {
+	_, err := r.db.Exec("UPDATE Produk_Roti SET Stok_Roti = ? WHERE ID_Produk = ?", stokBaru, id)
+	return err
+}
