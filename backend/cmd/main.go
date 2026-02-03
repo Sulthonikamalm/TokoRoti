@@ -33,7 +33,28 @@ func main() {
 	// Cek Environment Variable (Priority 1: Production/Cloud)
 	if urlEnv := os.Getenv("DATABASE_URL"); urlEnv != "" {
 		log.Println("Info: Menggunakan konfigurasi database dari Environment Variable (Cloud Mode).")
+
+		// Pastikan DSN memiliki parameter yang diperlukan untuk Aiven
+		// Aiven menggunakan format: mysql://user:pass@host:port/dbname
+		// Go MySQL Driver menggunakan format: user:pass@tcp(host:port)/dbname
 		dsn = urlEnv
+
+		// Tambahkan parameter TLS dan multiStatements jika belum ada
+		if !strings.Contains(dsn, "tls=") {
+			if strings.Contains(dsn, "?") {
+				dsn += "&tls=true"
+			} else {
+				dsn += "?tls=true"
+			}
+		}
+		if !strings.Contains(dsn, "multiStatements=") {
+			dsn += "&multiStatements=true"
+		}
+		if !strings.Contains(dsn, "parseTime=") {
+			dsn += "&parseTime=true"
+		}
+
+		log.Printf("Info: DSN Cloud diproses dengan TLS enabled.")
 	} else {
 		// Fallback ke Lokal XAMPP (Priority 2: Local Development)
 		dbUser := "root"
@@ -135,19 +156,29 @@ func cekTabel(db *sql.DB) {
 
 // jalankanMigrasi membaca file database.sql dan mengeksekusinya
 func jalankanMigrasi(db *sql.DB) {
-	// Mencari file database.sql di folder ../jejak-pembelajaran-sql/
-	pathSQL := filepath.Join("..", "jejak-pembelajaran-sql", "database.sql")
+	// Daftar path yang dicoba (urutan prioritas)
+	pathCandidates := []string{
+		"migrations/database.sql",                                     // Docker/Koyeb
+		filepath.Join("..", "jejak-pembelajaran-sql", "database.sql"), // Local dari backend/
+		filepath.Join("jejak-pembelajaran-sql", "database.sql"),       // Local dari root
+	}
 
-	// Baca file
-	kontenSQL, err := ioutil.ReadFile(pathSQL)
-	if err != nil {
-		// Coba path alternatif jika dijalankan dari root
-		pathSQL = filepath.Join("jejak-pembelajaran-sql", "database.sql")
-		kontenSQL, err = ioutil.ReadFile(pathSQL)
-		if err != nil {
-			log.Printf("❌ Gagal membaca file SQL migrasi: %v. Mohon import database.sql secara manual.", err)
-			return
+	var kontenSQL []byte
+	var err error
+	var pathSQL string
+
+	for _, p := range pathCandidates {
+		kontenSQL, err = ioutil.ReadFile(p)
+		if err == nil {
+			pathSQL = p
+			log.Printf("📂 File migrasi ditemukan: %s", pathSQL)
+			break
 		}
+	}
+
+	if err != nil {
+		log.Printf("❌ Gagal membaca file SQL migrasi dari semua path. Mohon import database.sql secara manual.")
+		return
 	}
 
 	queries := string(kontenSQL)

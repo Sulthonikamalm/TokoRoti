@@ -4,8 +4,11 @@
  */
 
 const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-// Ganti URL Render di bawah ini nanti setelah Backend deployed
-const PRODUCTION_API = 'https://tokoroti-backend.onrender.com'; 
+// ================================================================
+// GANTI URL DI BAWAH INI SETELAH DEPLOY BACKEND DI KOYEB
+// Format: https://[nama-app]-[username].koyeb.app
+// ================================================================
+const PRODUCTION_API = 'https://tokoroti-api.koyeb.app'; 
 
 const CONFIG = {
     API_URL: IS_LOCALHOST ? '/api' : `${PRODUCTION_API}/api`, 

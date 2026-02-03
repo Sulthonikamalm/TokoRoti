@@ -5,10 +5,13 @@
 
 // Konfigurasi Hybrid (Local vs Cloud)
 const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const PRODUCTION_API = 'https://tokoroti-backend.onrender.com';
+// ================================================================
+// GANTI URL DI BAWAH INI SETELAH DEPLOY BACKEND DI KOYEB
+// ================================================================
+const PRODUCTION_API = 'https://tokoroti-api.koyeb.app';
 
 const KONFIGURASI = {
-    URL_DASAR_API: IS_LOCALHOST ? '' : PRODUCTION_API, // Local pake relatif, Cloud pake Absolute URL Render
+    URL_DASAR_API: IS_LOCALHOST ? '' : PRODUCTION_API, // Local pake relatif, Cloud pake Absolute URL Koyeb
     TIMEOUT_REQUEST: 5000, 
     ENDPOINT: {
         PRODUK: '/api/produk',

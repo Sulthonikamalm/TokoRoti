@@ -29,7 +29,7 @@
 
 ---
 
-## 🏗️ Arsitektur Sistem
+## 🏗️ Arsitektur Sistem (Cloud Native)
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -37,26 +37,27 @@
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │            Frontend (Vanilla HTML/CSS/JS)           │    │
 │  │         Tailwind CSS • Fetch API • Responsive       │    │
-│  │              📍 Deploy: Vercel / GitHub Pages       │    │
+│  │          📍 Deploy: Vercel (toko-roti-nu.vercel.app)│    │
 │  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              ▼ REST API (JSON)
+                              ▼ REST API (JSON over HTTPS)
 ┌─────────────────────────────────────────────────────────────┐
 │                      ⚙️ LOGIC TIER                          │
 │  ┌─────────────────────────────────────────────────────┐    │
-│  │              Backend (Go / net/http)                │    │
+│  │              Backend (Go + Docker)                  │    │
 │  │      Clean Architecture • CORS • Auto-Reconnect     │    │
-│  │              📍 Deploy: Render / Railway            │    │
+│  │            📍 Deploy: Koyeb (tokoroti-api.koyeb.app)│    │
 │  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
                               │
-                              ▼ MySQL (TLS)
+                              ▼ MySQL (TLS/SSL Required)
 ┌─────────────────────────────────────────────────────────────┐
 │                       🗄️ DATA TIER                          │
 │  ┌─────────────────────────────────────────────────────┐    │
 │  │             Database (MySQL on Aiven)               │    │
 │  │         Managed Cloud • TLS • Auto Backup           │    │
+│  │     📍 Skema: jejak-pembelajaran-sql/database.sql   │    │
 │  └─────────────────────────────────────────────────────┘    │
 └─────────────────────────────────────────────────────────────┘
 ```
@@ -178,28 +179,32 @@ npx serve .
 
 ---
 
-## 🌐 Deployment
+## 🌐 Deployment (Cloud Stack)
 
-### Backend → Render
+### 1️⃣ Database → Aiven MySQL
+
+1. Buat MySQL service di [Aiven](https://aiven.io) (Free Tier available)
+2. Dapatkan **Service URI** dari dashboard
+3. Import skema dari `jejak-pembelajaran-sql/database.sql`
+4. Simpan URI untuk langkah berikutnya
+
+### 2️⃣ Backend → Koyeb (Docker)
 
 1. Push repository ke GitHub
-2. Buat Web Service baru di [Render](https://render.com)
-3. Set environment variables:
-   - `DATABASE_URL`
-   - `PORT` (optional, default 8080)
-   - `ALLOWED_ORIGINS`
+2. Buat App baru di [Koyeb](https://koyeb.com)
+3. Pilih **Docker** deployment method
+4. Set build context ke root repository (karena Dockerfile di root)
+5. Set environment variables:
+   - `DATABASE_URL` = Service URI dari Aiven
+   - `PORT` = `8080`
+6. Deploy! Backend akan otomatis migrasi database saat startup.
 
-### Frontend → Vercel
+### 3️⃣ Frontend → Vercel
 
-1. Push folder `frontend/` ke repository
-2. Import project di [Vercel](https://vercel.com)
-3. Update `API_BASE_URL` di `app.js`
-
-### Database → Aiven
-
-1. Buat MySQL service di [Aiven](https://aiven.io)
-2. Dapatkan connection string dengan SSL
-3. Import `database.sql`
+1. Import project di [Vercel](https://vercel.com)
+2. Set root directory ke `frontend/public` (untuk toko) atau `frontend/admin` (untuk dashboard)
+3. Update `PRODUCTION_API` di `js/app.js` dengan URL Koyeb yang didapat
+4. Deploy & enjoy! 🎉
 
 ---
 
