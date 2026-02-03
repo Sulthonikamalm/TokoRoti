@@ -34,10 +34,10 @@ func main() {
 	if urlEnv := os.Getenv("DATABASE_URL"); urlEnv != "" {
 		log.Println("Info: Menggunakan konfigurasi database dari Environment Variable (Cloud Mode).")
 
-		// Pastikan DSN memiliki parameter yang diperlukan untuk Aiven
-		// Aiven menggunakan format: mysql://user:pass@host:port/dbname
-		// Go MySQL Driver menggunakan format: user:pass@tcp(host:port)/dbname
-		dsn = urlEnv
+		// KONVERSI FORMAT URL AIVEN KE GO MYSQL DRIVER
+		// Aiven format:  mysql://user:pass@host:port/dbname
+		// Go Driver format: user:pass@tcp(host:port)/dbname
+		dsn = konversiURLAiven(urlEnv)
 
 		// Tambahkan parameter TLS dan multiStatements jika belum ada
 		if !strings.Contains(dsn, "tls=") {
@@ -216,4 +216,40 @@ func manualSplitExec(db *sql.DB, queries string) {
 		}
 	}
 	log.Printf("Info Migrasi: %d perintah berhasil, %d gagal/dilewati.", sukses, gagal)
+}
+
+// konversiURLAiven mengubah format URL Aiven ke format Go MySQL Driver
+// Input:  mysql://user:pass@host:port/dbname?ssl-mode=REQUIRED
+// Output: user:pass@tcp(host:port)/dbname
+func konversiURLAiven(url string) string {
+	// Hapus prefix mysql://
+	url = strings.TrimPrefix(url, "mysql://")
+
+	// Pisahkan credentials dan host
+	// Format: user:pass@host:port/dbname
+	atIndex := strings.Index(url, "@")
+	if atIndex == -1 {
+		log.Println("Warning: Format DATABASE_URL tidak valid (tidak ada @)")
+		return url
+	}
+
+	credentials := url[:atIndex]   // user:pass
+	hostAndPath := url[atIndex+1:] // host:port/dbname?params
+
+	// Pisahkan host:port dan path
+	slashIndex := strings.Index(hostAndPath, "/")
+	if slashIndex == -1 {
+		log.Println("Warning: Format DATABASE_URL tidak valid (tidak ada /)")
+		return url
+	}
+
+	hostPort := hostAndPath[:slashIndex]        // host:port
+	dbNameAndParams := hostAndPath[slashIndex:] // /dbname?params
+
+	// Bangun DSN format Go MySQL Driver
+	// Format: user:pass@tcp(host:port)/dbname?params
+	dsn := fmt.Sprintf("%s@tcp(%s)%s", credentials, hostPort, dbNameAndParams)
+
+	log.Printf("Info: URL Aiven berhasil dikonversi ke format Go MySQL Driver")
+	return dsn
 }
