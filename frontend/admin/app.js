@@ -8,7 +8,7 @@ const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location
 // ================================================================
 // GANTI URL DI BAWAH INI SETELAH DEPLOY BACKEND DI KOYEB
 // ================================================================
-const PRODUCTION_API = 'https://tokoroti-api.koyeb.app';
+const PRODUCTION_API = 'https://popular-shay-telkom-university-982c46db.koyeb.app';
 
 const KONFIGURASI = {
     URL_DASAR_API: IS_LOCALHOST ? '' : PRODUCTION_API, // Local pake relatif, Cloud pake Absolute URL Koyeb
