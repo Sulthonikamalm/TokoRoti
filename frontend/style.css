@@ -1,0 +1,47 @@
+/* 
+   DeepUI Custom Styles (DeepResponsive Edition)
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap');
+
+body {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar Modern */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 99px; }
+::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+/* Transisi Halus */
+.kartu-produk { will-change: transform, box-shadow; backface-visibility: hidden; }
+.animasi-masuk { animation: fadeUp 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; transform: translateY(10px); }
+
+@keyframes fadeUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive Table: Wrapper Horizontal Scroll Shadow */
+.table-responsive-wrapper {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    mask-image: linear-gradient(to right, black 90%, transparent 100%);
+}
+
+/* Navigasi Aktif */
+.nav-item.active { position: relative; }
+.nav-item.active::before {
+    content: '';
+    position: absolute;
+    left: 0; top: 50%; transform: translateY(-50%);
+    height: 20px; width: 3px;
+    background-color: #2563eb; /* Primary 600 */
+    border-radius: 0 4px 4px 0;
+}
+
+/* Mobile Sidebar Transition */
+#sidebar-utama { z-index: 50; } /* Pastikan di atas overlay */
+#mobile-overlay { z-index: 40; }
