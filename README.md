@@ -11,7 +11,7 @@
 
 Proyek integrasi Tugas Besar Basis Data ke aplikasi web dinamis.
 
-[🌐 Live Demo](https://popular-shay-telkom-university-982c46db.koyeb.app/) · [📖 Dokumentasi](#arsitektur) · [🚀 Deployment](#deployment)
+[🛒 Toko Pelanggan](https://toko-roti-nu.vercel.app/) · [📊 Admin Dashboard](https://popular-shay-telkom-university-982c46db.koyeb.app/admin/) · [📖 Dokumentasi](#arsitektur)
 
 </div>
 
