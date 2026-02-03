@@ -3,8 +3,12 @@
  * Core Logic & Responsiveness
  */
 
+// Konfigurasi Hybrid (Local vs Cloud)
+const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+const PRODUCTION_API = 'https://tokoroti-backend.onrender.com';
+
 const KONFIGURASI = {
-    URL_DASAR_API: '', // Relative
+    URL_DASAR_API: IS_LOCALHOST ? '' : PRODUCTION_API, // Local pake relatif, Cloud pake Absolute URL Render
     TIMEOUT_REQUEST: 5000, 
     ENDPOINT: {
         PRODUK: '/api/produk',

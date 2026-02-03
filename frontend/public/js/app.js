@@ -3,8 +3,12 @@
  * Version 4.1 (Registration Module)
  */
 
+const IS_LOCALHOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+// Ganti URL Render di bawah ini nanti setelah Backend deployed
+const PRODUCTION_API = 'https://tokoroti-backend.onrender.com'; 
+
 const CONFIG = {
-    API_URL: '/api', 
+    API_URL: IS_LOCALHOST ? '/api' : `${PRODUCTION_API}/api`, 
     TIMEOUT: 8000
 };
 
