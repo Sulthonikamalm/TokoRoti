@@ -1,11 +1,13 @@
 package main
 
 import (
+	"crypto/tls"
 	"database/sql"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,7 +15,7 @@ import (
 	"tokoroti/internal/handler"
 	"tokoroti/internal/repository"
 
-	_ "github.com/go-sql-driver/mysql"
+	"github.com/go-sql-driver/mysql"
 )
 
 func main() {
@@ -26,58 +28,64 @@ func main() {
 	}
 
 	// ==========================================
-	// 2. Konfigurasi Database (Cloud Ready)
+	// 2. Registrasi TLS "Skip Verify" (Anti Gagal SSL)
 	// ==========================================
-	var dsn string
-
-	// Cek Environment Variable (Priority 1: Production/Cloud)
-	if urlEnv := os.Getenv("DATABASE_URL"); urlEnv != "" {
-		log.Println("Info: Menggunakan konfigurasi database dari Environment Variable (Cloud Mode).")
-
-		// KONVERSI FORMAT URL AIVEN KE GO MYSQL DRIVER
-		// Aiven format:  mysql://user:pass@host:port/dbname
-		// Go Driver format: user:pass@tcp(host:port)/dbname
-		dsn = konversiURLAiven(urlEnv)
-
-		// Tambahkan parameter TLS dan multiStatements jika belum ada
-		if !strings.Contains(dsn, "tls=") {
-			if strings.Contains(dsn, "?") {
-				dsn += "&tls=true"
-			} else {
-				dsn += "?tls=true"
-			}
-		}
-		if !strings.Contains(dsn, "multiStatements=") {
-			dsn += "&multiStatements=true"
-		}
-		if !strings.Contains(dsn, "parseTime=") {
-			dsn += "&parseTime=true"
-		}
-
-		log.Printf("Info: DSN Cloud diproses dengan TLS enabled.")
-	} else {
-		// Fallback ke Lokal XAMPP (Priority 2: Local Development)
-		dbUser := "root"
-		dbPass := ""
-		dbHost := "127.0.0.1:3306"
-		dbName := "tokoroti"
-
-		log.Println("Info: Menggunakan konfigurasi database Lokal (XAMPP Mode).")
-
-		// Cek & Buat Database Lokal jika belum ada
-		dsnCek := fmt.Sprintf("%s:%s@tcp(%s)/", dbUser, dbPass, dbHost)
-		dbCek, err := sql.Open("mysql", dsnCek)
-		if err == nil {
-			_, _ = dbCek.Exec("CREATE DATABASE IF NOT EXISTS " + dbName)
-			dbCek.Close()
-		}
-
-		// multiStatements=true penting untuk seed data
-		dsn = fmt.Sprintf("%s:%s@tcp(%s)/%s?parseTime=true&multiStatements=true", dbUser, dbPass, dbHost, dbName)
+	// Kita buat konfigurasi TLS kustom bernama "custom-skip"
+	// yang mengizinkan sertifikat apa pun (InsecureSkipVerify: true)
+	errTLS := mysql.RegisterTLSConfig("custom-skip", &tls.Config{
+		InsecureSkipVerify: true,
+	})
+	if errTLS != nil {
+		log.Printf("Peringatan TLS: %v", errTLS)
 	}
 
 	// ==========================================
-	// 3. Inisialisasi Koneksi & Migrasi
+	// 3. Konfigurasi Database (Smart Parser)
+	// ==========================================
+	var dsn string
+	urlEnv := os.Getenv("DATABASE_URL")
+
+	if urlEnv != "" {
+		log.Println("Info: Menggunakan konfigurasi database dari Environment Variable.")
+
+		// LOGIKA PINTAR: Cek apakah formatnya mysql:// (dari Aiven)
+		// Jika ya, kita bongkar dan rakit ulang jadi format Go Driver
+		if strings.HasPrefix(urlEnv, "mysql://") {
+			parsedURL, err := url.Parse(urlEnv)
+			if err == nil {
+				password, _ := parsedURL.User.Password()
+				// Format Go: user:pass@tcp(host:port)/dbname?param
+				dsn = fmt.Sprintf("%s:%s@tcp(%s)%s",
+					parsedURL.User.Username(),
+					password,
+					parsedURL.Host,
+					parsedURL.Path,
+				)
+				log.Println("Info: URL 'mysql://' berhasil dikonversi otomatis.")
+			} else {
+				// Jika gagal parse, pakai apa adanya (fallback)
+				dsn = urlEnv
+			}
+		} else {
+			// Jika format sudah benar (bukan mysql://), pakai langsung
+			dsn = urlEnv
+		}
+
+		// Paksa menggunakan TLS config "custom-skip" yang kita buat di atas
+		if strings.Contains(dsn, "?") {
+			dsn += "&tls=custom-skip&multiStatements=true&parseTime=true"
+		} else {
+			dsn += "?tls=custom-skip&multiStatements=true&parseTime=true"
+		}
+
+	} else {
+		// Fallback ke Lokal XAMPP
+		log.Println("Info: Menggunakan konfigurasi database Lokal.")
+		dsn = "root:@tcp(127.0.0.1:3306)/tokoroti?parseTime=true&multiStatements=true"
+	}
+
+	// ==========================================
+	// 4. Inisialisasi Koneksi & Migrasi
 	// ==========================================
 	db, err := repository.InisialisasiDatabase(dsn)
 	if err != nil {
@@ -95,7 +103,7 @@ func main() {
 	repoPelanggan := repository.BuatRepositoryPelanggan(db)
 	h := handler.BuatHandler(repoProduk, repoTransaksi, repoPencatatan, repoPelanggan)
 
-	// Routing & Server
+	// Routing
 	mux := http.NewServeMux()
 
 	// --- API Endpoints ---
@@ -115,27 +123,18 @@ func main() {
 		w.Write([]byte(`{"status":"sehat", "pesan":"Sistem berjalan normal"}`))
 	})
 
-	// --- STATIC FILE SERVING (Frontend Integration) ---
-	// Solusi Elegan: Backend melayani Frontend agar satu domain (No CORS Issues)
-
-	// 1. Serve Folder Public (Toko) di Root URL
+	// --- Frontend Serving ---
 	fsPublic := http.FileServer(http.Dir("../frontend/public"))
 	mux.Handle("/", http.StripPrefix("/", fsPublic))
-
-	// 2. Serve Folder Admin di URL /admin/
-	// Perlu trik sedikit karena struktur folder frontend terpisah
 	fsAdmin := http.FileServer(http.Dir("../frontend/admin"))
 	mux.Handle("/admin/", http.StripPrefix("/admin/", fsAdmin))
 
-	// CORS sudah tidak terlalu krusial karena satu domain, tapi tetap pasang untuk safety
 	handlerAkhir := handler.MiddlewareCORS(mux)
 
 	log.Println("===============================================================")
-	log.Printf("✅ SISTEM BREADHOUSE SIAP (MODE FULLSTACK)")
+	log.Printf("✅ SISTEM BREADHOUSE SIAP (BYPASS SSL MODE)")
 	log.Printf("🛒 Toko (Public) : http://localhost:%s/", portAplikasi)
 	log.Printf("📊 Admin Panel   : http://localhost:%s/admin/", portAplikasi)
-	log.Printf("📡 API Endpoint  : http://localhost:%s/api/...", portAplikasi)
-	log.Printf("📂 Database      : 'tokoroti' (Terhubung)")
 	log.Println("===============================================================")
 
 	if err := http.ListenAndServe(":"+portAplikasi, handlerAkhir); err != nil {
@@ -143,58 +142,51 @@ func main() {
 	}
 }
 
-// cekTabel mengecek apakah tabel 'produk_roti' ada. Jika tidak, jalankan migrasi SQL.
+// Helper functions
 func cekTabel(db *sql.DB) {
 	_, err := db.Query("SELECT 1 FROM produk_roti LIMIT 1")
 	if err != nil {
-		log.Println("⚠️  Tabel belum ditemukan. Memulai MIGRASI DATA OTOMATIS...")
+		log.Println("⚠️ Tabel belum ditemukan. Memulai MIGRASI DATA...")
 		jalankanMigrasi(db)
 	} else {
 		log.Println("info: Tabel database sudah lengkap. Siap digunakan.")
 	}
 }
 
-// jalankanMigrasi membaca file database.sql dan mengeksekusinya
 func jalankanMigrasi(db *sql.DB) {
-	// Daftar path yang dicoba (urutan prioritas)
 	pathCandidates := []string{
-		"migrations/database.sql",                                     // Docker/Koyeb
-		filepath.Join("..", "jejak-pembelajaran-sql", "database.sql"), // Local dari backend/
-		filepath.Join("jejak-pembelajaran-sql", "database.sql"),       // Local dari root
+		"../jejak-pembelajaran-sql/database.sql", // Prioritas path deployment baru
+		"migrations/database.sql",
+		"jejak-pembelajaran-sql/database.sql",
+		filepath.Join("..", "jejak-pembelajaran-sql", "database.sql"),
 	}
 
 	var kontenSQL []byte
 	var err error
-	var pathSQL string
 
 	for _, p := range pathCandidates {
 		kontenSQL, err = ioutil.ReadFile(p)
 		if err == nil {
-			pathSQL = p
-			log.Printf("📂 File migrasi ditemukan: %s", pathSQL)
+			log.Printf("📂 File migrasi ditemukan: %s", p)
 			break
 		}
 	}
 
 	if err != nil {
-		log.Printf("❌ Gagal membaca file SQL migrasi dari semua path. Mohon import database.sql secara manual.")
+		log.Printf("❌ Gagal membaca file database.sql. Pastikan folder jejak-pembelajaran-sql ikut ter-upload.")
 		return
 	}
 
 	queries := string(kontenSQL)
-
-	// Eksekusi SQL (membutuhkan multiStatements=true di DSN)
 	_, err = db.Exec(queries)
 	if err != nil {
-		// Jika error karena multiple statements, kita coba split manual sederhana
-		log.Printf("⚠️ Gagal eksekusi langsung (%v). Mencoba split statement...", err)
+		log.Printf("⚠️ Gagal eksekusi langsung, mencoba split statement...")
 		manualSplitExec(db, queries)
 	} else {
-		log.Println("✅ Sukses! Database telah diisi dengan data awal (Seeding).")
+		log.Println("✅ Sukses! Database telah diisi (Seeding).")
 	}
 }
 
-// manualSplitExec memecah query berdasarkan ';' untuk kompatibilitas driver
 func manualSplitExec(db *sql.DB, queries string) {
 	statements := strings.Split(queries, ";")
 	sukses := 0
@@ -207,7 +199,6 @@ func manualSplitExec(db *sql.DB, queries string) {
 		}
 		_, err := db.Exec(stmt)
 		if err != nil {
-			// Abaikan error drop table if exists
 			if !strings.Contains(err.Error(), "Unknown table") {
 				gagal++
 			}
@@ -216,40 +207,4 @@ func manualSplitExec(db *sql.DB, queries string) {
 		}
 	}
 	log.Printf("Info Migrasi: %d perintah berhasil, %d gagal/dilewati.", sukses, gagal)
-}
-
-// konversiURLAiven mengubah format URL Aiven ke format Go MySQL Driver
-// Input:  mysql://user:pass@host:port/dbname?ssl-mode=REQUIRED
-// Output: user:pass@tcp(host:port)/dbname
-func konversiURLAiven(url string) string {
-	// Hapus prefix mysql://
-	url = strings.TrimPrefix(url, "mysql://")
-
-	// Pisahkan credentials dan host
-	// Format: user:pass@host:port/dbname
-	atIndex := strings.Index(url, "@")
-	if atIndex == -1 {
-		log.Println("Warning: Format DATABASE_URL tidak valid (tidak ada @)")
-		return url
-	}
-
-	credentials := url[:atIndex]   // user:pass
-	hostAndPath := url[atIndex+1:] // host:port/dbname?params
-
-	// Pisahkan host:port dan path
-	slashIndex := strings.Index(hostAndPath, "/")
-	if slashIndex == -1 {
-		log.Println("Warning: Format DATABASE_URL tidak valid (tidak ada /)")
-		return url
-	}
-
-	hostPort := hostAndPath[:slashIndex]        // host:port
-	dbNameAndParams := hostAndPath[slashIndex:] // /dbname?params
-
-	// Bangun DSN format Go MySQL Driver
-	// Format: user:pass@tcp(host:port)/dbname?params
-	dsn := fmt.Sprintf("%s@tcp(%s)%s", credentials, hostPort, dbNameAndParams)
-
-	log.Printf("Info: URL Aiven berhasil dikonversi ke format Go MySQL Driver")
-	return dsn
 }
