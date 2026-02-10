@@ -10,6 +10,7 @@
 [![Deploy](https://img.shields.io/badge/Deploy-Koyeb-6C5CE7?style=flat-square)](https://koyeb.com/)
 
 Proyek integrasi Tugas Besar Basis Data ke aplikasi web dinamis.
+Berikut adalah link untuk demo
 
 [🛒 Toko Pelanggan](https://toko-roti-nu.vercel.app/) · [📊 Admin Dashboard](https://popular-shay-telkom-university-982c46db.koyeb.app/admin/) · [📖 Dokumentasi](#arsitektur)
 
