@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"tokoroti/internal/handler"
 	"tokoroti/internal/repository"
@@ -61,9 +62,11 @@ func main() {
 					parsedURL.Host,
 					parsedURL.Path,
 				)
-				log.Println("Info: URL 'mysql://' berhasil dikonversi otomatis.")
+				log.Printf("Info: URL 'mysql://' berhasil dikonversi otomatis.")
+				log.Printf("Debug: Database Host = %s", parsedURL.Host)
 			} else {
 				// Jika gagal parse, pakai apa adanya (fallback)
+				log.Printf("Peringatan: Gagal parse URL mysql:// - %v", err)
 				dsn = urlEnv
 			}
 		} else {
@@ -73,9 +76,9 @@ func main() {
 
 		// Paksa menggunakan TLS config "custom-skip" yang kita buat di atas
 		if strings.Contains(dsn, "?") {
-			dsn += "&tls=custom-skip&multiStatements=true&parseTime=true"
+			dsn += "&tls=custom-skip&multiStatements=true&parseTime=true&timeout=30s&readTimeout=30s&writeTimeout=30s"
 		} else {
-			dsn += "?tls=custom-skip&multiStatements=true&parseTime=true"
+			dsn += "?tls=custom-skip&multiStatements=true&parseTime=true&timeout=30s&readTimeout=30s&writeTimeout=30s"
 		}
 
 	} else {
@@ -85,11 +88,32 @@ func main() {
 	}
 
 	// ==========================================
-	// 4. Inisialisasi Koneksi & Migrasi
+	// 4. Inisialisasi Koneksi & Migrasi (dengan Retry)
 	// ==========================================
-	db, err := repository.InisialisasiDatabase(dsn)
-	if err != nil {
-		log.Fatalf("Fatal: Gagal inisialisasi koneksi aplikasi: %v", err)
+	var db *repository.KoneksiDatabase
+	var err error
+	
+	// Retry mechanism untuk DNS resolution issue di cloud
+	maxRetries := 5
+	retryDelay := 2 * time.Second
+	
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		log.Printf("Percobaan koneksi database ke-%d dari %d...", attempt, maxRetries)
+		db, err = repository.InisialisasiDatabase(dsn)
+		if err == nil {
+			log.Println("✅ Koneksi database berhasil!")
+			break
+		}
+		
+		log.Printf("⚠️ Gagal koneksi (attempt %d): %v", attempt, err)
+		
+		if attempt < maxRetries {
+			log.Printf("Menunggu %v sebelum retry...", retryDelay)
+			time.Sleep(retryDelay)
+			retryDelay *= 2 // Exponential backoff
+		} else {
+			log.Fatalf("Fatal: Gagal inisialisasi koneksi setelah %d percobaan: %v", maxRetries, err)
+		}
 	}
 	defer db.Tutup()
 
